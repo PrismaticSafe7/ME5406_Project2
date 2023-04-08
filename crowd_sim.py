@@ -296,7 +296,13 @@ class CrowdSim(gym.Env):
             agent.time_step = self.time_step
             agent.policy.time_step = self.time_step
 
+        # Re-initializing values
+        self.states = list()
+        self.action_values = list()
+        self.attention_weights = list()
+
         # Get current observation
+        
         all_robot_ob = []
         for robot in self.robots:
             robot_ob = []
@@ -336,7 +342,7 @@ class CrowdSim(gym.Env):
                     if self.seeable_distance >= dist:
                         ob.append(agent_state)
             
-            human_actions.append(ob)
+            human_actions.append(human.act(ob))
 
         dmin = []
         collision = []
@@ -406,7 +412,58 @@ class CrowdSim(gym.Env):
                 done = False
                 info = Nothing()
             
-            robot_info.append([ob,reward,done,info])
+            robot_info.append([reward,done,info])
         
         if update:
-            self.states.append(1) #line 391 of crowd_sim.py
+            new_state = []
+            for agent in self.robots + self.humans:
+                new_state.append(agent.get_full_state()) #line 391 of crowd_sim.py
+            
+            self.states.append(new_state)
+
+            for robot in self.robots:
+                if hasattr(robot.policy, 'action_values'):
+                    self.action_values.append(robot.policy.action_values)
+                if hasattr(robot.policy, 'get_attention_weights'):
+                    self.attention_weights.append(robot.policy.get_attention_weights())
+
+                # Update all robot loc
+                robot.step(action)
+            
+            for i, human_action in enumerate(human_actions):
+                self.humans[i].step(human_action)
+            
+            self.global_time += self.time_step
+
+            for i, human in enumerate(self.humans):
+                # only record the first time the human reaches the goal
+                if self.human_times[i] == 0 and human.reached_destination():
+                    self.human_times[i] = self.global_time
+
+            # Update all agent's observation
+            for i, robot in enumerate(self.robots):
+                robot_ob = []
+                robot_state = robot.get_observable_state()
+                for agent in self.robots + self.humans:
+                    if agent != robot:
+                        agent_state = agent.get_observable_state()
+                        dist = ((agent_state.px - robot_state.px)**2 + (agent_state.py - robot_state.py)**2) ** (1/2)
+                        if self.seeable_distance >= dist:
+                            robot_ob.append(agent_state)
+
+                robot_info[i] = robot_ob + robot_info[i]
+
+        else:
+            for i, robot in enumerate(self.robots):
+                robot_ob = []
+                robot_state = robot.get_next_observable_state()
+                for agent in self.robots + self.humans:
+                    if agent != robot:
+                        agent_state = agent.get_next_observable_state()
+                        dist = ((agent_state.px - robot_state.px)**2 + (agent_state.py - robot_state.py)**2) ** (1/2)
+                        if self.seeable_distance >= dist:
+                            robot_ob.append(agent_state)
+
+                robot_info[i] = robot_ob + robot_info[i]
+        
+        return robot_info
