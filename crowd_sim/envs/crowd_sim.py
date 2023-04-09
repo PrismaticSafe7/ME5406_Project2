@@ -43,6 +43,7 @@ class CrowdSim(gym.Env):
         self.square_width = None
         self.circle_radius = None
         self.human_num = None
+        self.seeable_distance = None
         # for visualization
         self.states = None
         self.action_values = None
@@ -57,6 +58,7 @@ class CrowdSim(gym.Env):
         self.collision_penalty = config.getfloat('reward', 'collision_penalty')
         self.discomfort_dist = config.getfloat('reward', 'discomfort_dist')
         self.discomfort_penalty_factor = config.getfloat('reward', 'discomfort_penalty_factor')
+        self.seeable_distance = config.getint('sim','seeable_distance')
         if self.config.get('humans', 'policy') == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
@@ -305,7 +307,13 @@ class CrowdSim(gym.Env):
 
         # get current observation
         if self.robot.sensor == 'coordinates':
-            ob = [human.get_observable_state() for human in self.humans]
+            curr = self.robot.get_observable_state()
+            ob = []
+            for human in self.humans:
+                human_state = human.get_observable_state()
+                dist = ((human.px - curr.px) ** 2 + (human.py - curr.py) ** 2) ** (1/2)
+                if self.seeable_distance >= dist:
+                    ob.append(human_state)
         elif self.robot.sensor == 'RGB':
             raise NotImplementedError
 
@@ -322,9 +330,18 @@ class CrowdSim(gym.Env):
         human_actions = []
         for human in self.humans:
             # observation for humans is always coordinates
-            ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
+            human_state = human.get_observable_state()
+            agents = self.humans
+            ob = []
             if self.robot.visible:
-                ob += [self.robot.get_observable_state()]
+                agents += [self.robot]
+            
+            for agent in agents:
+                if agent != human:
+                    agent_state = agent.get_observable_state()
+                    dist = ((agent_state.px - human_state.px)**2 + (agent_state.py - human_state.py)**2) ** (1/2)
+                    if self.seeable_distance >= dist:
+                        ob.append(agent_state)
             human_actions.append(human.act(ob))
 
         # collision detection
@@ -408,12 +425,24 @@ class CrowdSim(gym.Env):
 
             # compute the observation
             if self.robot.sensor == 'coordinates':
-                ob = [human.get_observable_state() for human in self.humans]
+                curr = self.robot.get_observable_state()
+                ob = []
+                for human in self.humans:
+                    human_state = human.get_observable_state()
+                    dist = ((human.px - curr.px) ** 2 + (human.py - curr.py) ** 2) ** (1/2)
+                    if self.seeable_distance >= dist:
+                        ob.append(human_state)
             elif self.robot.sensor == 'RGB':
                 raise NotImplementedError
         else:
             if self.robot.sensor == 'coordinates':
-                ob = [human.get_next_observable_state(action) for human, action in zip(self.humans, human_actions)]
+                curr = self.robot.get_observable_state()
+                ob = []
+                for human in self.humans:
+                    human_state = human.get_observable_state()
+                    dist = ((human.px - curr.px) ** 2 + (human.py - curr.py) ** 2) ** (1/2)
+                    if self.seeable_distance >= dist:
+                        ob.append(human_state)
             elif self.robot.sensor == 'RGB':
                 raise NotImplementedError
 
