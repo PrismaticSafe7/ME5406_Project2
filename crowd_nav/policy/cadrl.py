@@ -35,30 +35,32 @@ class CADRL(Policy):
         self.name = 'CADRL'
         self.trainable = True
         self.multiagent_training = None
-        self.kinematics = None
+        self.kinematics = 'holonomic'
         self.epsilon = None
-        self.gamma = None
-        self.sampling = None
-        self.speed_samples = None
-        self.rotation_samples = None
-        self.query_env = None
+        self.gamma = 0.9
+        self.sampling = 'exponential'
+        self.speed_samples = 5
+        self.rotation_samples = 16
+        self.query_env = True
+        # action space size is speed_samples * rotation_samples + 1
         self.action_space = None
         self.speeds = None
         self.rotations = None
         self.action_values = None
         self.with_om = None
-        self.cell_num = None
-        self.cell_size = None
-        self.om_channel_size = None
+        self.cell_num = 4
+        self.cell_size = 1
+        self.om_channel_size = 3
         self.self_state_dim = 6
         self.human_state_dim = 7
         self.joint_state_dim = self.self_state_dim + self.human_state_dim
+        self.gpu = True
 
     def configure(self, config):
         self.set_common_parameters(config)
-        mlp_dims = [int(x) for x in config.get('cadrl', 'mlp_dims').split(', ')]
+        mlp_dims = [150,100,100,1]
         self.model = ValueNetwork(self.joint_state_dim, mlp_dims)
-        self.multiagent_training = config.getboolean('cadrl', 'multiagent_training')
+        self.multiagent_training = False
         logging.info('Policy: CADRL without occupancy map')
 
     def set_common_parameters(self, config):
@@ -73,7 +75,7 @@ class CADRL(Policy):
         self.om_channel_size = config.getint('om', 'om_channel_size')
 
     def set_device(self, device):
-        self.device = device
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() and self.gpu else "cpu")
         self.model.to(device)
 
     def set_epsilon(self, epsilon):
