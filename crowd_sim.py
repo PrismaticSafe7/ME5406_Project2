@@ -22,7 +22,7 @@ class CrowdSim(gym.Env):
         """
         self.time_limit = None
         self.time_step = None
-        self.robot = None
+        self.robots = None
         self.humans = None
         self.global_time = None
         self.human_times = None
@@ -279,7 +279,7 @@ class CrowdSim(gym.Env):
 
         Set px, py, gx, gy, vx, vy and theta for robot and humans
         '''
-        if self.robot is None:
+        if self.robots is None:
             raise AttributeError('robot has to be set!')
         
         self.global_time = 0  # Initialize global time
